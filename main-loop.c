@@ -103,7 +103,7 @@ static void sigfd_handler(void *opaque)
 {
     int fd = (intptr_t)opaque;
     struct qemu_signalfd_siginfo info;
-    struct sigaction action;
+    struct sigaction action = {};
     ssize_t len;
 
     while (1) {
