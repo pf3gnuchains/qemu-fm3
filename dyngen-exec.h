@@ -61,7 +61,7 @@
 #endif
 
 #if defined(AREG0)
-register CPUState *env asm(AREG0);
+CPUState *env asm(AREG0);
 #else
 /* TODO: Try env = cpu_single_env. */
 extern CPUState *env;
