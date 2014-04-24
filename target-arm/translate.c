@@ -9709,14 +9709,14 @@ static void disas_thumb_insn(CPUState *env, DisasContext *s)
             if (IS_M(env)) {
                 tmp = tcg_const_i32((insn & (1 << 4)) != 0);
                 /* PRIMASK */
-                if (insn & 1) {
+                if (insn & 2) {
                     addr = tcg_const_i32(16);
                     gen_helper_v7m_msr(cpu_env, addr, tmp);
                     tcg_temp_free_i32(addr);
                 }
                 /* FAULTMASK */
-                if (insn & 2) {
-                    addr = tcg_const_i32(17);
+                if (insn & 1) {
+                    addr = tcg_const_i32(19);
                     gen_helper_v7m_msr(cpu_env, addr, tmp);
                     tcg_temp_free_i32(addr);
                 }

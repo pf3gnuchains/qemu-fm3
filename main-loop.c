@@ -447,7 +447,9 @@ int main_loop_wait(int nonblocking)
     slirp_select_fill(&nfds, &rfds, &wfds, &xfds);
 #endif
     qemu_iohandler_fill(&nfds, &rfds, &wfds, &xfds);
+#ifndef _WIN32
     glib_select_fill(&nfds, &rfds, &wfds, &xfds, &tv);
+#endif
 
     if (timeout > 0) {
         qemu_mutex_unlock_iothread();
@@ -459,7 +461,9 @@ int main_loop_wait(int nonblocking)
         qemu_mutex_lock_iothread();
     }
 
+#ifndef _WIN32
     glib_select_poll(&rfds, &wfds, &xfds, (ret < 0));
+#endif
     qemu_iohandler_poll(&rfds, &wfds, &xfds, ret);
 #ifdef CONFIG_SLIRP
     slirp_select_poll(&rfds, &wfds, &xfds, (ret < 0));

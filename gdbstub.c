@@ -318,6 +318,10 @@ static GDBState *gdbserver_state;
    gdb that understands target descriptions.  */
 static int gdb_has_xml;
 
+#ifndef CONFIG_USER_ONLY
+static int gdbserver_chr_event = CHR_EVENT_CLOSED;
+#endif
+
 #ifdef CONFIG_USER_ONLY
 /* XXX: This is not thread safe.  Do we care?  */
 static int gdbserver_fd = -1;
@@ -364,6 +368,16 @@ int use_gdb_syscalls(void)
     }
     return gdb_syscall_mode == GDB_SYS_ENABLED;
 }
+
+#ifndef CONFIG_USER_ONLY
+int gdbserver_opend(void)
+{
+    if (gdbserver_chr_event == CHR_EVENT_OPENED) {
+        return 1;
+    }
+    return 0;
+}
+#endif
 
 /* Resume execution.  */
 static inline void gdb_continue(GDBState *s)
@@ -2820,6 +2834,7 @@ static void gdb_chr_event(void *opaque, int event)
     default:
         break;
     }
+    gdbserver_chr_event = event;
 }
 
 static void gdb_monitor_output(GDBState *s, const char *msg, int len)

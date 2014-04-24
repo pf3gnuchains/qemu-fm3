@@ -129,7 +129,7 @@ static int bitband_init(SysBusDevice *dev)
     sysbus_init_mmio_region(dev, &s->iomem);
     return 0;
 }
-
+#if 0
 static void armv7m_bitband_init(void)
 {
     DeviceState *dev;
@@ -144,7 +144,7 @@ static void armv7m_bitband_init(void)
     qdev_init_nofail(dev);
     sysbus_mmio_map(sysbus_from_qdev(dev), 0, 0x42000000);
 }
-
+#endif
 /* Board init.  */
 
 static void armv7m_reset(void *opaque)
@@ -157,7 +157,7 @@ static void armv7m_reset(void *opaque)
    Returns the NVIC array.  */
 
 qemu_irq *armv7m_init(MemoryRegion *address_space_mem,
-                      int flash_size, int sram_size,
+                      int flash_size, int sram_size, target_phys_addr_t sram_start,
                       const char *kernel_filename, const char *cpu_model)
 {
     CPUState *env;
@@ -202,8 +202,10 @@ qemu_irq *armv7m_init(MemoryRegion *address_space_mem,
     memory_region_set_readonly(flash, true);
     memory_region_add_subregion(address_space_mem, 0, flash);
     memory_region_init_ram(sram, NULL, "armv7m.sram", sram_size);
-    memory_region_add_subregion(address_space_mem, 0x20000000, sram);
+    memory_region_add_subregion(address_space_mem, sram_start, sram);
+#if 0
     armv7m_bitband_init();
+#endif
 
     nvic = qdev_create(NULL, "armv7m_nvic");
     env->nvic = nvic;

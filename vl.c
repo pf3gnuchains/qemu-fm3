@@ -1473,6 +1473,13 @@ static void main_loop(void)
 #ifdef CONFIG_PROFILER
     int64_t ti;
 #endif
+
+#if 1
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#endif
+#endif
+
     do {
         nonblocking = !kvm_enabled() && last_io > 0;
 #ifdef CONFIG_PROFILER

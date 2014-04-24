@@ -290,14 +290,12 @@ void cpu_reset(CPUARMState *env)
         env->cp15.c15_cpar = 1;
     }
 #else
-    /* SVC mode with interrupts disabled.  */
-    env->uncached_cpsr = ARM_CPU_MODE_SVC | CPSR_A | CPSR_F | CPSR_I;
-    /* On ARMv7-M the CPSR_I is the value of the PRIMASK register, and is
-       clear at reset.  Initial SP and PC are loaded from ROM.  */
+    /* On ARMv7-M status are cleared at reset and initial SP and PC are 
+     * loaded from ROM.  */
     if (IS_M(env)) {
         uint32_t pc;
         uint8_t *rom;
-        env->uncached_cpsr &= ~CPSR_I;
+
         rom = rom_ptr(0);
         if (rom) {
             /* We should really use ldl_phys here, in case the guest
@@ -309,6 +307,26 @@ void cpu_reset(CPUARMState *env)
             env->thumb = pc & 1;
             env->regs[15] = pc & ~1;
         }
+        /* preset to an illegal exception return value */
+        env->regs[14] = 0xffffffff;
+
+        /* The status bits are cleared, which are:
+              - Exception Number 
+              - IT/ICI bits 
+              - priority mask
+              - fault mask
+              - base priority 
+        and T bit set from vector */
+        env->uncached_cpsr = env->thumb? CPSR_T:0;
+        env->v7m.basepri = 0;
+
+        /* Current stack is Main, thread is privileged */
+        env->v7m.control = 0;
+        env->v7m.current_sp = 0;
+        env->v7m.other_sp = 0;
+    } else {
+        /* SVC mode with interrupts disabled.  */
+        env->uncached_cpsr = ARM_CPU_MODE_SVC | CPSR_A | CPSR_F | CPSR_I;
     }
     env->vfp.xregs[ARM_VFP_FPEXC] = 0;
     env->cp15.c2_base_mask = 0xffffc000u;
@@ -729,6 +747,10 @@ static void switch_v7m_sp(CPUARMState *env, int process)
         env->v7m.other_sp = env->regs[13];
         env->regs[13] = tmp;
         env->v7m.current_sp = process;
+        if (process)
+            env->v7m.control |= 2;
+        else
+            env->v7m.control &= ~2;
     }
 }
 
@@ -738,8 +760,13 @@ static void do_v7m_exception_exit(CPUARMState *env)
     uint32_t xpsr;
 
     type = env->regs[15];
-    if (env->v7m.exception != 0)
+    if (env->v7m.exception != 0) {
         armv7m_nvic_complete_irq(env->nvic, env->v7m.exception);
+		/* Returning from any exception except NMI clears FAULTMASK to 0 */
+        if (env->v7m.exception != 2) {
+            env->uncached_cpsr &= ~CPSR_F;
+        }
+    }
 
     /* Switch to the target stack.  */
     switch_v7m_sp(env, (type & 4) != 0);
@@ -750,7 +777,7 @@ static void do_v7m_exception_exit(CPUARMState *env)
     env->regs[3] = v7m_pop(env);
     env->regs[12] = v7m_pop(env);
     env->regs[14] = v7m_pop(env);
-    env->regs[15] = v7m_pop(env);
+    env->regs[15] = v7m_pop(env) & ~1;
     xpsr = v7m_pop(env);
     xpsr_write(env, xpsr, 0xfffffdff);
     /* Undo stack alignment.  */
@@ -761,6 +788,12 @@ static void do_v7m_exception_exit(CPUARMState *env)
        if there is a mismatch.  */
     /* ??? Likewise for mismatches between the CONTROL register and the stack
        pointer.  */
+#if 0
+    if (env->regs[15] & 1) {
+    	printf("%s: R15=0x%x\n", __func__, env->regs[15]);
+        abort();
+    }
+#endif
 }
 
 static void do_interrupt_v7m(CPUARMState *env)
@@ -768,6 +801,7 @@ static void do_interrupt_v7m(CPUARMState *env)
     uint32_t xpsr = xpsr_read(env);
     uint32_t lr;
     uint32_t addr;
+    uint32_t tmp;
 
     lr = 0xfffffff1;
     if (env->v7m.current_sp)
@@ -784,7 +818,9 @@ static void do_interrupt_v7m(CPUARMState *env)
         armv7m_nvic_set_pending(env->nvic, ARMV7M_EXCP_USAGE);
         return;
     case EXCP_SWI:
+#if 0
         env->regs[15] += 2;
+#endif
         armv7m_nvic_set_pending(env->nvic, ARMV7M_EXCP_SVC);
         return;
     case EXCP_PREFETCH_ABORT:
@@ -804,7 +840,29 @@ static void do_interrupt_v7m(CPUARMState *env)
         armv7m_nvic_set_pending(env->nvic, ARMV7M_EXCP_DEBUG);
         return;
     case EXCP_IRQ:
+#if 0
         env->v7m.exception = armv7m_nvic_acknowledge_irq(env->nvic);
+        //printf("%s: %d\n", __func__, env->v7m.exception);
+        if (env->v7m.exception == 6)
+            cpu_abort(env, "Usage fault\n");
+
+        if (env->v7m.basepri) {
+            int pri = armv7m_nvic_get_priority(env->nvic, env->v7m.exception);
+            if (env->v7m.basepri <= pri) {
+                armv7m_nvic_complete_irq(env->nvic, env->v7m.exception);
+                return;
+            }
+        }
+#else
+        tmp = armv7m_nvic_get_current_pending(env->nvic);
+        if (env->v7m.basepri) {
+            int pri = armv7m_nvic_get_priority(env->nvic, tmp);
+            if (env->v7m.basepri <= pri) {
+                return;
+            }
+        }
+        env->v7m.exception = armv7m_nvic_acknowledge_irq(env->nvic);
+#endif
         break;
     case EXCP_EXCEPTION_EXIT:
         do_v7m_exception_exit(env);
@@ -821,6 +879,7 @@ static void do_interrupt_v7m(CPUARMState *env)
         env->regs[13] -= 4;
         xpsr |= 0x200;
     }
+
     /* Switch to the handler mode.  */
     v7m_push(env, xpsr);
     v7m_push(env, env->regs[15]);
@@ -831,7 +890,11 @@ static void do_interrupt_v7m(CPUARMState *env)
     v7m_push(env, env->regs[1]);
     v7m_push(env, env->regs[0]);
     switch_v7m_sp(env, 0);
+#if 0
     env->uncached_cpsr &= ~CPSR_IT;
+#else
+    env->condexec_bits = 0;
+#endif
     env->regs[14] = lr;
     addr = ldl_phys(env->v7m.vecbase + env->v7m.exception * 4);
     env->regs[15] = addr & 0xfffffffe;

@@ -409,6 +409,21 @@ Dump 80 16 bit values at the start of the video memory.
 @end itemize
 ETEXI
 
+STEXI
+@item mp /fmt @var{addr} @var{value}
+@findex mp
+Physical memory modify starting at @var{addr}.
+ETEXI
+
+    {
+        .name       = "mp",
+        .args_type  = "fmt:/,addr:l,val:l",
+        .params     = "/fmt addr value",
+        .help       = "memory modify starting at 'addr'",
+        .mhandler.cmd = do_physical_memory_modify,
+    },
+
+
     {
         .name       = "p|print",
         .args_type  = "fmt:/,val:l",

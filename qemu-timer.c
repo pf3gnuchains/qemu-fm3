@@ -846,6 +846,10 @@ fail:
 
 int qemu_calculate_timeout(void)
 {
+#ifndef _WIN32
     return 1000;
+#else
+    return 1;
+#endif
 }
 

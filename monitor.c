@@ -1323,6 +1323,17 @@ static void do_physical_memory_dump(Monitor *mon, const QDict *qdict)
     memory_dump(mon, count, format, size, addr, 1);
 }
 
+static void do_physical_memory_modify(Monitor *mon, const QDict *qdict)
+{
+    uint32_t size = qdict_get_int(qdict, "size");
+    target_phys_addr_t addr = qdict_get_int(qdict, "addr");
+    target_long val = qdict_get_int(qdict, "val");
+
+    if (4 < size)
+        size = 4;
+    cpu_physical_memory_write(addr, (const void *)&val, size);
+}
+
 static void do_print(Monitor *mon, const QDict *qdict)
 {
     int format = qdict_get_int(qdict, "format");
